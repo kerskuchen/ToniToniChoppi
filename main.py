@@ -78,16 +78,27 @@ class PageChoppingDimensions:
     def get_clipping_rect_for_page_index(self, page_index_x: int, page_index_y: int):
         assert 0 <= page_index_x and page_index_x < self.page_count_x
         assert 0 <= page_index_y and page_index_y < self.page_count_y
+
+        if page_index_x == self.page_count_x - 1:
+            page_width = self.last_column_width
+        else:
+            page_width = self.page_inner_width
+
+        if page_index_y == self.page_count_y - 1:
+            page_height = self.last_row_height
+        else:
+            page_height = self.page_inner_height
+
         return Rect(
             page_index_x * self.page_inner_width,
             page_index_y * self.page_inner_height,
-            self.page_inner_width,
-            self.page_inner_height,
+            page_width,
+            page_height,
         )
 
 
 def svg_draw_marker_horizontal(
-    svg_parent_node: any,
+    svg_parent_node: ElementTree.Element,
     text: str,
     pos_x: float,
     pos_y: float,
@@ -154,7 +165,7 @@ def svg_draw_marker_horizontal(
 
 
 def svg_draw_marker_vertical(
-    svg_parent_node: any,
+    svg_parent_node: ElementTree.Element,
     text: str,
     pos_x: float,
     pos_y: float,
@@ -257,7 +268,7 @@ def svg_validate_and_get_image_dimensions(svg_node):
 
 
 def svg_draw_grid_and_markers(
-    svg_node: any,
+    svg_node: ElementTree.Element,
     dimensions: PageChoppingDimensions,
     grid_line_thickness: float,
     use_half_grid_thickness: bool,
@@ -394,7 +405,7 @@ def svg_draw_grid_and_markers(
 
 
 def svg_create_page(
-    svg_tree_readonly: any,
+    svg_tree_readonly: ElementTree,
     dimensions: PageChoppingDimensions,
     page_index_x: int,
     page_index_y: int,
@@ -415,19 +426,49 @@ def svg_create_page(
         ),
     )
 
-    # print(svg_node.text)
-    # print(svg_node.tail)
-    # print(svg_node.attrib)
-    # for child in svg_node:
-    #     print(child.tag, child.attrib)
+    clip_rect_node = ElementTree.Element(SVG_NAMESPACE_PREFIX + "rect")
+    clip_rect_node.set("x", str(clip_rect.x))
+    clip_rect_node.set("y", str(clip_rect.y))
+    clip_rect_node.set("width", str(clip_rect.width))
+    clip_rect_node.set("height", str(clip_rect.height))
+    clip_rect_node.set("stroke_width", "0")
+    clip_rect_node.set("fill", "#000")
 
-    # defs_node = svg_node.find("svg:defs", SVG_NAMESPACE)
-    # assert defs_node != None
-    # if defs_node != None:
-    #     for clippath_node in defs_node.findall("svg:clipPath", SVG_NAMESPACE):
-    #         print(clippath_node.tag, clippath_node.attrib)
+    clip_path_node_page = ElementTree.Element(SVG_NAMESPACE_PREFIX + "clipPath")
+    clip_path_node_page.set("id", "page_clipping_rect")
+    clip_path_node_page.append(clip_rect_node)
 
-    # tree.write("output.svg")
+    defs_node = svg_root_node.find("svg:defs", SVG_NAMESPACE)
+    if defs_node == None:
+        defs_node = ElementTree.Element(SVG_NAMESPACE_PREFIX + "defs")
+        svg_root_node.insert(defs_node, 0)
+    defs_node.append(clip_path_node_page)
+
+    tags_to_reparent = [
+        SVG_NAMESPACE_PREFIX + "text",
+        SVG_NAMESPACE_PREFIX + "ellipse",
+        SVG_NAMESPACE_PREFIX + "image",
+        SVG_NAMESPACE_PREFIX + "line",
+        SVG_NAMESPACE_PREFIX + "polyon",
+        SVG_NAMESPACE_PREFIX + "polyline",
+        SVG_NAMESPACE_PREFIX + "rect",
+        SVG_NAMESPACE_PREFIX + "circle",
+        SVG_NAMESPACE_PREFIX + "g",
+        SVG_NAMESPACE_PREFIX + "path",
+    ]
+    elements_to_reparent = []
+    for child in svg_root_node:
+        if child.tag in tags_to_reparent:
+            elements_to_reparent.append(child)
+
+    clipping_group_node = ElementTree.Element(SVG_NAMESPACE_PREFIX + "g")
+    clipping_group_node.set("clip-path", "url(#page_clipping_rect)")
+    svg_root_node.append(clipping_group_node)
+
+    for element in elements_to_reparent:
+        svg_root_node.remove(element)
+        clipping_group_node.append(element)
+
     return svg_tree
 
 
