@@ -409,6 +409,7 @@ def svg_create_page(
     dimensions: PageChoppingDimensions,
     page_index_x: int,
     page_index_y: int,
+    enable_debug_color: bool = False,
 ):
     svg_tree = copy.deepcopy(svg_tree_readonly)
     svg_root_node = svg_tree.getroot()
@@ -469,6 +470,19 @@ def svg_create_page(
         svg_root_node.remove(element)
         clipping_group_node.append(element)
 
+    ###
+    if enable_debug_color:
+        back_rect = ElementTree.Element(SVG_NAMESPACE_PREFIX + "rect")
+        back_rect.set("x", str(clip_rect.x - dimensions.page_border))
+        back_rect.set("y", str(clip_rect.y - dimensions.page_border))
+        back_rect.set("width", str(dimensions.page_outer_width))
+        back_rect.set("height", str(dimensions.page_outer_height))
+        back_rect.set("stroke_width", "0")
+        back_rect.set("fill", "#ff00ff")
+        back_rect.set("opacity", "0.2")
+        svg_root_node.append(back_rect)
+    ###
+
     return svg_tree
 
 
@@ -500,7 +514,7 @@ def process_image(
     for page_index_y in range(dimensions.page_count_y):
         for page_index_x in range(dimensions.page_count_x):
             svg_trees_pages[(page_index_x, page_index_y)] = svg_create_page(
-                svg_tree_page, dimensions, page_index_x, page_index_y
+                svg_tree_page, dimensions, page_index_x, page_index_y, enable_debug_color=True
             )
 
     image_filename = os.path.splitext(os.path.basename(image_filepath))[0]
