@@ -8,7 +8,7 @@ from xml.etree import ElementTree
 # US-Letter 215.9mm  279.4mm
 PAGE_INNER_WIDTH_MM = 180.0
 PAGE_INNER_HEIGHT_MM = 250.0
-PAGE_BORDER_MM = 15.0
+PAGE_BORDER_MM = 14.0
 PAGE_WIDTH_MM = PAGE_INNER_WIDTH_MM + 2.0 * PAGE_BORDER_MM
 PAGE_HEIGHT_MM = PAGE_INNER_HEIGHT_MM + 2.0 * PAGE_BORDER_MM
 
@@ -147,9 +147,10 @@ def draw_marker_horizontal(
     color: str = "#555",
     fill_diamonds: bool = True,
     opacity: float = 0.7,
+    marker_size: float = 7.0,
 ):
     text_left = ElementTree.Element(SVG_NAMESPACE_PREFIX + "text")
-    text_left.set("x", str(pos_x - 12))
+    text_left.set("x", str(pos_x - (marker_size + 2.0)))
     text_left.set("y", str(pos_y))
     text_left.set("font-family", "sans-serif")
     text_left.set("font-size", "10")
@@ -161,7 +162,7 @@ def draw_marker_horizontal(
     text_left.text = text
 
     text_right = ElementTree.Element(SVG_NAMESPACE_PREFIX + "text")
-    text_right.set("x", str(pos_x + 12))
+    text_right.set("x", str(pos_x + (marker_size + 2.0)))
     text_right.set("y", str(pos_y))
     text_right.set("font-family", "sans-serif")
     text_right.set("font-size", "10")
@@ -176,19 +177,19 @@ def draw_marker_horizontal(
     diamond.set(
         "d",
         "M{} {} L{} {} L{} {} L{} {} L{} {}".format(
-            pos_x - 10,
+            pos_x - marker_size,
             pos_y,
             pos_x,
-            pos_y + 5,
-            pos_x + 10,
+            pos_y + marker_size / 2.0,
+            pos_x + marker_size,
             pos_y,
             pos_x,
-            pos_y - 5,
-            pos_x - 10,
+            pos_y - marker_size / 2.0,
+            pos_x - marker_size,
             pos_y,
         ),
     )
-    diamond.set("stroke-width", "1")
+    diamond.set("stroke-width", "0.5")
     diamond.set("stroke", color)
     if fill_diamonds:
         diamond.set("fill", color)
@@ -213,10 +214,11 @@ def draw_marker_vertical(
     color: str = "#555",
     fill_diamonds: bool = True,
     opacity: float = 0.7,
+    marker_size: float = 7.0,
 ):
     text_top = ElementTree.Element(SVG_NAMESPACE_PREFIX + "text")
     text_top.set("x", str(pos_x))
-    text_top.set("y", str(pos_y - 15))
+    text_top.set("y", str(pos_y - (marker_size + 5.0)))
     text_top.set("font-family", "sans-serif")
     text_top.set("font-size", "10")
     text_top.set("dominant-baseline", "middle")
@@ -228,7 +230,7 @@ def draw_marker_vertical(
 
     text_bottom = ElementTree.Element(SVG_NAMESPACE_PREFIX + "text")
     text_bottom.set("x", str(pos_x))
-    text_bottom.set("y", str(pos_y + 17))
+    text_bottom.set("y", str(pos_y + (marker_size + 7.0)))
     text_bottom.set("font-family", "sans-serif")
     text_bottom.set("font-size", "10")
     text_bottom.set("dominant-baseline", "middle")
@@ -243,18 +245,18 @@ def draw_marker_vertical(
         "d",
         "M{} {} L{} {} L{} {} L{} {} L{} {}".format(
             pos_x,
-            pos_y - 10,
-            pos_x + 5,
+            pos_y - marker_size,
+            pos_x + marker_size / 2.0,
             pos_y,
             pos_x,
-            pos_y + 10,
-            pos_x - 5,
+            pos_y + marker_size,
+            pos_x - marker_size / 2.0,
             pos_y,
             pos_x,
-            pos_y - 10,
+            pos_y - marker_size,
         ),
     )
-    diamond.set("stroke-width", "1")
+    diamond.set("stroke-width", "0.5")
     diamond.set("stroke", color)
     if fill_diamonds:
         diamond.set("fill", color)
@@ -283,7 +285,9 @@ for page_index_y in range(0, page_count_y):
             pos_y = page_index_y * PAGE_INNER_HEIGHT_MM + 0.5 * last_page_height
         else:
             pos_y = page_index_y * PAGE_INNER_HEIGHT_MM + 0.5 * PAGE_INNER_HEIGHT_MM
-        draw_marker_horizontal(svg_node, text, pos_x, pos_y, fill_diamonds=False)
+        draw_marker_horizontal(
+            svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
+        )
 
 # VERTICAL MARKERS
 for page_index_y in range(0, page_count_y - 1):
@@ -297,7 +301,9 @@ for page_index_y in range(0, page_count_y - 1):
         else:
             pos_x = page_index_x * PAGE_INNER_WIDTH_MM + 0.5 * PAGE_INNER_WIDTH_MM
         pos_y = (page_index_y + 1) * PAGE_INNER_HEIGHT_MM
-        draw_marker_vertical(svg_node, text, pos_x, pos_y, fill_diamonds=False)
+        draw_marker_vertical(
+            svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
+        )
 
 clip_rect_x = page_index_x * PAGE_INNER_WIDTH_MM
 clip_rect_y = page_index_y * PAGE_INNER_HEIGHT_MM
