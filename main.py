@@ -1,146 +1,93 @@
 import math
+import copy
+import os
+import shutil
 from xml.etree import ElementTree
 
-
-# http://betweenborders.com/wordsmithing/a4-vs-us-letter/
-#           Width    Length
-# A4        210.0mm  297.0mm
-# US-Letter 215.9mm  279.4mm
-PAGE_INNER_WIDTH_MM = 180.0
-PAGE_INNER_HEIGHT_MM = 250.0
-PAGE_BORDER_MM = 14.0
-PAGE_WIDTH_MM = PAGE_INNER_WIDTH_MM + 2.0 * PAGE_BORDER_MM
-PAGE_HEIGHT_MM = PAGE_INNER_HEIGHT_MM + 2.0 * PAGE_BORDER_MM
 
 SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
 SVG_NAMESPACE_PREFIX = "{http://www.w3.org/2000/svg}"
 
-ALPHABET_LETTERS = [
-    "a",
-    "b",
-    "c",
-    "d",
-    "e",
-    "f",
-    "g",
-    "h",
-    "i",
-    "j",
-    "k",
-    "l",
-    "m",
-    "n",
-    "o",
-    "p",
-    "q",
-    "r",
-    "s",
-    "t",
-    "u",
-    "v",
-    "w",
-    "x",
-    "y",
-    "z",
-    "A",
-    "B",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "I",
-    "J",
-    "K",
-    "L",
-    "M",
-    "N",
-    "O",
-    "P",
-    "Q",
-    "R",
-    "S",
-    "T",
-    "U",
-    "V",
-    "W",
-    "X",
-    "Y",
-    "Z",
-]
 
-# NOTE: This prevents writing "ns0" on each tag in the output file
-ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
+class Rect:
+    x: float
+    y: float
+    width: float
+    height: float
 
-tree = ElementTree.parse("test-a0.svg")
-svg_node = tree.getroot()
-assert svg_node.tag.endswith("svg"), "Input file is not a valid SVG image"
-assert (
-    svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
-), "SVG image with 'x' attribute is not supported"
-assert (
-    svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
-), "SVG image with 'y' attribute is not supported"
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+    ):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
 
-assert svg_node.get("width").endswith("mm"), "Input image width is not given im Millimeters"
-assert svg_node.get("height").endswith("mm"), "Input image height is not given im Millimeters"
-image_width = float(svg_node.get("width").removesuffix("mm"))
-image_height = float(svg_node.get("height").removesuffix("mm"))
-print("SVG image dimensions: {}mm x {}mm ".format(image_width, image_height))
 
-assert svg_node.get("viewBox") != None, "SVG image is missing a 'viewBox' attribute"
-viewbox_x, viewbox_y, viewbox_width, viewbox_height = map(float, svg_node.get("viewBox").split(" "))
-print(
-    "SVG view box dimensions: {}mm x {}mm {}mm x {}mm".format(
-        viewbox_x, viewbox_y, viewbox_width, viewbox_height
-    )
-)
-assert viewbox_x == 0, "SVG image viewBox.x must be zero"
-assert viewbox_y == 0, "SVG image viewBox.y must be zero"
-assert viewbox_width == image_width, "SVG image viewBox.width must be the same as the image width"
-assert (
-    viewbox_height == image_height
-), "SVG image viewBox.height must be the same as the image height"
+# Dimensions are in Millimeters
+class PageChoppingDimensions:
+    image_width: float
+    image_height: float
+    page_inner_width: float
+    page_inner_height: float
+    page_border: float
+    page_outer_width: float
+    page_outer_height: float
+    count_page_inner_x: int
+    count_page_inner_y: int
+    last_column_width: float
+    last_row_height: float
 
-page_count_x = math.ceil(image_width / PAGE_INNER_WIDTH_MM)
-page_count_y = math.ceil(image_height / PAGE_INNER_HEIGHT_MM)
-last_page_width = image_width % PAGE_INNER_WIDTH_MM
-last_page_height = image_height % PAGE_INNER_HEIGHT_MM
-if last_page_width == 0.0:
-    last_page_width = PAGE_INNER_WIDTH_MM
-if last_page_height == 0.0:
-    last_page_height = PAGE_INNER_HEIGHT_MM
-print("Resulting page count: {}x{}".format(page_count_x, page_count_y))
-assert page_count_x > 0, "Image has invalid horizontal dimensions"
-assert page_count_y > 0, "Image has invalid vertical dimensions"
+    # Dimensions are in Millimeters
+    def __init__(
+        self,
+        image_width: float,
+        image_height: float,
+        page_inner_width: float,
+        page_inner_height: float,
+        page_border: float,
+    ):
+        self.image_width = image_width
+        self.image_height = image_height
+        self.page_inner_width = page_inner_width
+        self.page_inner_height = page_inner_height
+        self.page_border = page_border
 
-# DRAW GRID
-rect_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "rect")
-rect_line.set("stroke", "#000")
-rect_line.set("fill", "none")
-rect_line.set("stroke-width", "1")
-rect_line.set("x", "0")
-rect_line.set("y", "0")
-rect_line.set("width", str(image_width))
-rect_line.set("height", str(image_height))
-svg_node.append(rect_line)
-for page_index_x in range(1, page_count_x):
-    vertical_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "path")
-    vertical_line.set("stroke", "#000")
-    vertical_line.set("stroke-width", "1")
-    vertical_line.set("d", "M{} 0 V{}".format(page_index_x * PAGE_INNER_WIDTH_MM, image_height))
-    svg_node.append(vertical_line)
-for page_index_y in range(1, page_count_y):
-    horizontal_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "path")
-    horizontal_line.set("stroke", "#000")
-    horizontal_line.set("stroke-width", "1")
-    horizontal_line.set("d", "M0 {} H{}".format(page_index_y * PAGE_INNER_HEIGHT_MM, image_width))
-    svg_node.append(horizontal_line)
+        self.page_outer_width = page_inner_width + 2.0 * page_border
+        self.page_outer_height = page_inner_height + 2.0 * page_border
 
-# DRAW MARKERS
-def draw_marker_horizontal(
-    svg: any,
+        self.page_count_x = math.ceil(image_width / page_inner_width)
+        self.page_count_y = math.ceil(image_height / page_inner_height)
+        self.last_column_width = image_width % page_inner_width
+        self.last_row_height = image_height % page_inner_height
+        if self.last_column_width == 0.0:
+            self.last_column_width = page_inner_width
+        if self.last_row_height == 0.0:
+            self.last_row_height = page_inner_height
+
+        print("Resulting page count: {}x{}".format(self.page_count_x, self.page_count_y))
+        print("Last column width: {}mm".format(self.last_column_width))
+        print("Last row height: {}mm".format(self.last_row_height))
+        assert self.page_count_x > 0, "Image has invalid horizontal dimensions"
+        assert self.page_count_y > 0, "Image has invalid vertical dimensions"
+
+    def get_clipping_rect_for_page_index(self, page_index_x: int, page_index_y: int):
+        assert 0 <= page_index_x and page_index_x < self.page_count_x
+        assert 0 <= page_index_y and page_index_y < self.page_count_y
+        return Rect(
+            page_index_x * self.page_inner_width,
+            page_index_y * self.page_inner_height,
+            self.page_inner_width,
+            self.page_inner_height,
+        )
+
+
+def svg_draw_marker_horizontal(
+    svg_parent_node: any,
     text: str,
     pos_x: float,
     pos_y: float,
@@ -203,11 +150,11 @@ def draw_marker_horizontal(
     group.append(text_right)
     group.append(diamond)
 
-    svg_node.append(group)
+    svg_parent_node.append(group)
 
 
-def draw_marker_vertical(
-    svg: any,
+def svg_draw_marker_vertical(
+    svg_parent_node: any,
     text: str,
     pos_x: float,
     pos_y: float,
@@ -270,68 +217,277 @@ def draw_marker_vertical(
     group.append(text_bottom)
     group.append(diamond)
 
-    svg_node.append(group)
+    svg_parent_node.append(group)
 
 
-# HORIZONTAL MARKERS
-for page_index_y in range(0, page_count_y):
-    for page_index_x in range(0, page_count_x - 1):
-        col_index = ALPHABET_LETTERS[page_index_x]
-        row_index = str(1 + 2 * page_index_y)
-        text = row_index + col_index
-        pos_x = (page_index_x + 1) * PAGE_INNER_WIDTH_MM
-        if page_index_y == page_count_y - 1:
-            # Last row may be smaller in height
-            pos_y = page_index_y * PAGE_INNER_HEIGHT_MM + 0.5 * last_page_height
+def svg_validate_and_get_image_dimensions(svg_node):
+    assert svg_node.tag.endswith("svg"), "Input file is not a valid SVG image"
+    assert (
+        svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
+    ), "SVG image with 'x' attribute is not supported"
+    assert (
+        svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
+    ), "SVG image with 'y' attribute is not supported"
+
+    assert svg_node.get("width").endswith("mm"), "Input image width is not given im Millimeters"
+    assert svg_node.get("height").endswith("mm"), "Input image height is not given im Millimeters"
+    image_width = float(svg_node.get("width").removesuffix("mm"))
+    image_height = float(svg_node.get("height").removesuffix("mm"))
+    print("SVG image dimensions: {}mm x {}mm ".format(image_width, image_height))
+
+    assert svg_node.get("viewBox") != None, "SVG image is missing a 'viewBox' attribute"
+    viewbox_x, viewbox_y, viewbox_width, viewbox_height = map(
+        float, svg_node.get("viewBox").split(" ")
+    )
+    print(
+        "SVG view box dimensions: {}mm x {}mm {}mm x {}mm".format(
+            viewbox_x, viewbox_y, viewbox_width, viewbox_height
+        )
+    )
+    assert viewbox_x == 0, "SVG image viewBox.x must be zero"
+    assert viewbox_y == 0, "SVG image viewBox.y must be zero"
+    assert (
+        viewbox_width == image_width
+    ), "SVG image viewBox.width must be the same as the image width"
+    assert (
+        viewbox_height == image_height
+    ), "SVG image viewBox.height must be the same as the image height"
+
+    return image_width, image_height
+
+
+def svg_draw_grid_and_markers(
+    svg_node: any,
+    dimensions: PageChoppingDimensions,
+    grid_line_thickness: float,
+    use_half_grid_thickness: bool,
+):
+    ALPHABET_LETTERS = [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m",
+        "n",
+        "o",
+        "p",
+        "q",
+        "r",
+        "s",
+        "t",
+        "u",
+        "v",
+        "w",
+        "x",
+        "y",
+        "z",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z",
+    ]
+
+    # DRAW GRID
+    rect_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "rect")
+    rect_line.set("stroke", "#000")
+    rect_line.set("fill", "none")
+    rect_line.set("stroke-width", str(grid_line_thickness))
+    rect_line.set("x", "0")
+    rect_line.set("y", "0")
+    rect_line.set("width", str(dimensions.image_width))
+    rect_line.set("height", str(dimensions.image_height))
+    svg_node.append(rect_line)
+    for page_index_x in range(1, dimensions.page_count_x):
+        vertical_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "path")
+        vertical_line.set("stroke", "#000")
+        if use_half_grid_thickness:
+            vertical_line.set("stroke-width", str(grid_line_thickness / 2.0))
         else:
-            pos_y = page_index_y * PAGE_INNER_HEIGHT_MM + 0.5 * PAGE_INNER_HEIGHT_MM
-        draw_marker_horizontal(
-            svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
+            vertical_line.set("stroke-width", str(grid_line_thickness))
+        vertical_line.set(
+            "d",
+            "M{} 0 V{}".format(page_index_x * dimensions.page_inner_width, dimensions.image_height),
+        )
+        svg_node.append(vertical_line)
+    for page_index_y in range(1, dimensions.page_count_y):
+        horizontal_line = ElementTree.Element(SVG_NAMESPACE_PREFIX + "path")
+        horizontal_line.set("stroke", "#000")
+        if use_half_grid_thickness:
+            horizontal_line.set("stroke-width", str(grid_line_thickness / 2.0))
+        else:
+            horizontal_line.set("stroke-width", str(grid_line_thickness))
+        horizontal_line.set(
+            "d",
+            "M0 {} H{}".format(page_index_y * dimensions.page_inner_height, dimensions.image_width),
+        )
+        svg_node.append(horizontal_line)
+
+    # HORIZONTAL MARKERS
+    for page_index_y in range(0, dimensions.page_count_y):
+        for page_index_x in range(0, dimensions.page_count_x - 1):
+            col_index = ALPHABET_LETTERS[page_index_x]
+            row_index = str(1 + 2 * page_index_y)
+            text = row_index + col_index
+            pos_x = (page_index_x + 1) * dimensions.page_inner_width
+            if page_index_y == dimensions.page_count_y - 1:
+                # Last row may be smaller in height
+                pos_y = (
+                    page_index_y * dimensions.page_inner_height + 0.5 * dimensions.last_row_height
+                )
+            else:
+                pos_y = (
+                    page_index_y * dimensions.page_inner_height + 0.5 * dimensions.page_inner_height
+                )
+            svg_draw_marker_horizontal(
+                svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
+            )
+
+    # VERTICAL MARKERS
+    for page_index_y in range(0, dimensions.page_count_y - 1):
+        for page_index_x in range(0, dimensions.page_count_x):
+            col_index = ALPHABET_LETTERS[page_index_x]
+            row_index = str(2 * (page_index_y + 1))
+            text = row_index + col_index
+            if page_index_x == dimensions.page_count_x - 1:
+                # Last column may be smaller in width
+                pos_x = (
+                    page_index_x * dimensions.page_inner_width + 0.5 * dimensions.last_column_width
+                )
+            else:
+                pos_x = (
+                    page_index_x * dimensions.page_inner_width + 0.5 * dimensions.page_inner_width
+                )
+            pos_y = (page_index_y + 1) * dimensions.page_inner_height
+            svg_draw_marker_vertical(
+                svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
+            )
+
+
+def svg_create_page(
+    svg_tree_readonly: any,
+    dimensions: PageChoppingDimensions,
+    page_index_x: int,
+    page_index_y: int,
+):
+    svg_tree = copy.deepcopy(svg_tree_readonly)
+    svg_root_node = svg_tree.getroot()
+    clip_rect = dimensions.get_clipping_rect_for_page_index(page_index_x, page_index_y)
+
+    svg_root_node.set("width", str(dimensions.page_outer_width))
+    svg_root_node.set("height", str(dimensions.page_outer_height))
+    svg_root_node.set(
+        "viewBox",
+        "{} {} {} {}".format(
+            clip_rect.x - dimensions.page_border,
+            clip_rect.y - dimensions.page_border,
+            dimensions.page_outer_width,
+            dimensions.page_outer_height,
+        ),
+    )
+
+    # print(svg_node.text)
+    # print(svg_node.tail)
+    # print(svg_node.attrib)
+    # for child in svg_node:
+    #     print(child.tag, child.attrib)
+
+    # defs_node = svg_node.find("svg:defs", SVG_NAMESPACE)
+    # assert defs_node != None
+    # if defs_node != None:
+    #     for clippath_node in defs_node.findall("svg:clipPath", SVG_NAMESPACE):
+    #         print(clippath_node.tag, clippath_node.attrib)
+
+    # tree.write("output.svg")
+    return svg_tree
+
+
+def process_image(
+    image_filepath: str,
+    page_inner_width_mm: float,
+    page_inner_height_mm: float,
+    page_border_mm: float,
+):
+    # NOTE: This prevents writing "ns0" on each tag in the output file
+    ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
+
+    svg_tree = ElementTree.parse(image_filepath)
+    svg_root_node = svg_tree.getroot()
+    image_width, image_height = svg_validate_and_get_image_dimensions(svg_root_node)
+    dimensions = PageChoppingDimensions(
+        image_width, image_height, page_inner_width_mm, page_inner_height_mm, page_border_mm
+    )
+
+    svg_tree_overview = copy.deepcopy(svg_tree)
+    svg_root_node_overview = svg_tree_overview.getroot()
+    svg_draw_grid_and_markers(svg_root_node_overview, dimensions, 1.0, True)
+
+    svg_tree_page = svg_tree
+    svg_root_node_page = svg_tree_page.getroot()
+    svg_draw_grid_and_markers(svg_root_node_page, dimensions, 1.0, False)
+
+    svg_trees_pages = {}
+    for page_index_y in range(dimensions.page_count_y):
+        for page_index_x in range(dimensions.page_count_x):
+            svg_trees_pages[(page_index_x, page_index_y)] = svg_create_page(
+                svg_tree_page, dimensions, page_index_x, page_index_y
+            )
+
+    image_filename = os.path.splitext(os.path.basename(image_filepath))[0]
+    output_dir = image_filename
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+
+    svg_tree_overview.write(os.path.join(output_dir, image_filename + "__overview.svg"))
+    for (page_index_x, page_index_y), svg_tree_page in svg_trees_pages.items():
+        svg_tree_page.write(
+            os.path.join(
+                output_dir,
+                "{}__{}x{}.svg".format(image_filename, page_index_x, page_index_y),
+            )
         )
 
-# VERTICAL MARKERS
-for page_index_y in range(0, page_count_y - 1):
-    for page_index_x in range(0, page_count_x):
-        col_index = ALPHABET_LETTERS[page_index_x]
-        row_index = str(2 * (page_index_y + 1))
-        text = row_index + col_index
-        if page_index_x == page_count_x - 1:
-            # Last column may be smaller in width
-            pos_x = page_index_x * PAGE_INNER_WIDTH_MM + 0.5 * last_page_width
-        else:
-            pos_x = page_index_x * PAGE_INNER_WIDTH_MM + 0.5 * PAGE_INNER_WIDTH_MM
-        pos_y = (page_index_y + 1) * PAGE_INNER_HEIGHT_MM
-        draw_marker_vertical(
-            svg_node, text, pos_x, pos_y, color="#000", opacity=0.30, fill_diamonds=True
-        )
 
-clip_rect_x = page_index_x * PAGE_INNER_WIDTH_MM
-clip_rect_y = page_index_y * PAGE_INNER_HEIGHT_MM
-clip_rect_width = PAGE_INNER_WIDTH_MM
-clip_rect_height = PAGE_INNER_HEIGHT_MM
+def main():
+    # http://betweenborders.com/wordsmithing/a4-vs-us-letter/
+    #           Width    Length
+    # A4        210.0mm  297.0mm
+    # US-Letter 215.9mm  279.4mm
+    PAGE_INNER_WIDTH_MM = 180.0
+    PAGE_INNER_HEIGHT_MM = 250.0
+    PAGE_BORDER_MM = 14.0
+    IMAGE_FILEPATH = "test-a0.svg"
+    process_image(IMAGE_FILEPATH, PAGE_INNER_WIDTH_MM, PAGE_INNER_HEIGHT_MM, PAGE_BORDER_MM)
 
-# svg_node.set("width", str(PAGE_WIDTH_MM))
-# svg_node.set("height", str(PAGE_HEIGHT_MM))
-# svg_node.set(
-#     "viewBox",
-#     "{} {} {} {}".format(
-#         clip_rect_x - PAGE_BORDER_MM,
-#         clip_rect_y - PAGE_BORDER_MM,
-#         PAGE_WIDTH_MM,
-#         PAGE_HEIGHT_MM,
-#     ),
-# )
 
-# print(svg_node.text)
-# print(svg_node.tail)
-# print(svg_node.attrib)
-# for child in svg_node:
-#     print(child.tag, child.attrib)
-
-defs_node = svg_node.find("svg:defs", SVG_NAMESPACE)
-assert defs_node != None
-if defs_node != None:
-    for clippath_node in defs_node.findall("svg:clipPath", SVG_NAMESPACE):
-        print(clippath_node.tag, clippath_node.attrib)
-
-tree.write("output.svg")
+main()
