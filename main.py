@@ -6,13 +6,18 @@ import shutil
 import ctypes
 from xml.etree import ElementTree
 
+SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
+SVG_NAMESPACE_PREFIX = "{http://www.w3.org/2000/svg}"
 g_current_image_filepath = ""
 
 
 def exit_error(message: str):
     MB_OK = 0x0
     ICON_STOP = 0x10
-    final_message = "Error processing '{}':\n{}".format(g_current_image_filepath, message)
+    if g_current_image_filepath != "":
+        final_message = "Error processing '{}':\n{}".format(g_current_image_filepath, message)
+    else:
+        final_message = "Error:\n{}".format(message)
     MessageBox = ctypes.windll.user32.MessageBoxW
     MessageBox(None, final_message, "ToniToniChoppi", MB_OK | ICON_STOP)
     sys.exit(final_message)
@@ -24,10 +29,6 @@ def exit_success():
     MessageBox = ctypes.windll.user32.MessageBoxW
     MessageBox(None, "Finished creating sheets. Enjoy!", "ToniToniChoppi", MB_OK | ICON_INFO)
     sys.exit()
-
-
-SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
-SVG_NAMESPACE_PREFIX = "{http://www.w3.org/2000/svg}"
 
 
 class Rect:
@@ -577,6 +578,11 @@ def main():
     ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
 
     image_filepaths = [each for each in os.listdir("./") if each.endswith(".svg")]
+    if len(image_filepaths) == 0:
+        exit_error(
+            "Directory does not contain any SVG images. Please put at least one SVG image in the directory beside ToniToniChoppi.exe"
+        )
+
     for image_filepath in image_filepaths:
         process_image(image_filepath, PAGE_INNER_WIDTH_MM, PAGE_INNER_HEIGHT_MM, PAGE_BORDER_MM)
 
