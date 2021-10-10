@@ -3,13 +3,27 @@ import copy
 import os
 import sys
 import shutil
+import ctypes
 from xml.etree import ElementTree
 
 g_current_image_filepath = ""
 
 
 def exit_error(message: str):
-    sys.exit("ERROR processing image '{}': {}".format(g_current_image_filepath, message))
+    MB_OK = 0x0
+    ICON_STOP = 0x10
+    final_message = "Error processing '{}':\n{}".format(g_current_image_filepath, message)
+    MessageBox = ctypes.windll.user32.MessageBoxW
+    MessageBox(None, final_message, "ToniToniChoppi", MB_OK | ICON_STOP)
+    sys.exit(final_message)
+
+
+def exit_success():
+    MB_OK = 0x0
+    ICON_INFO = 0x40
+    MessageBox = ctypes.windll.user32.MessageBoxW
+    MessageBox(None, "Finished creating sheets. Enjoy!", "ToniToniChoppi", MB_OK | ICON_INFO)
+    sys.exit()
 
 
 SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
@@ -565,6 +579,8 @@ def main():
     image_filepaths = [each for each in os.listdir("./") if each.endswith(".svg")]
     for image_filepath in image_filepaths:
         process_image(image_filepath, PAGE_INNER_WIDTH_MM, PAGE_INNER_HEIGHT_MM, PAGE_BORDER_MM)
+
+    exit_success()
 
 
 main()
