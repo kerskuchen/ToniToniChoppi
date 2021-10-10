@@ -1,8 +1,15 @@
 import math
 import copy
 import os
+import sys
 import shutil
 from xml.etree import ElementTree
+
+g_current_image_filepath = ""
+
+
+def exit_error(message: str):
+    sys.exit("ERROR processing image '{}': {}".format(g_current_image_filepath, message))
 
 
 SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
@@ -72,8 +79,10 @@ class PageChoppingDimensions:
         print("Resulting page count: {}x{}".format(self.page_count_x, self.page_count_y))
         print("Last column width: {}mm".format(self.last_column_width))
         print("Last row height: {}mm".format(self.last_row_height))
-        assert self.page_count_x > 0, "Image has invalid horizontal dimensions"
-        assert self.page_count_y > 0, "Image has invalid vertical dimensions"
+        if self.page_count_x <= 0:
+            exit_error("Image has invalid horizontal dimensions")
+        if self.page_count_y <= 0:
+            exit_error("Image has invalid vertical dimensions")
 
     def get_clipping_rect_for_page_index(self, page_index_x: int, page_index_y: int):
         assert 0 <= page_index_x and page_index_x < self.page_count_x
@@ -231,22 +240,30 @@ def svg_draw_marker_vertical(
     svg_parent_node.append(group)
 
 
-def svg_validate_and_get_image_dimensions(svg_node):
-    assert svg_node.tag.endswith("svg"), "Input file is not a valid SVG image"
-    assert (
-        svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
-    ), "SVG image with 'x' attribute is not supported"
-    assert (
-        svg_node.get("x") == None or float(svg_node.get("x")) == 0.0
-    ), "SVG image with 'y' attribute is not supported"
+def svg_validate_and_get_image_dimensions(svg_node) -> tuple[float]:
+    if not svg_node.tag.endswith("svg"):
+        exit_error("Input file is not a valid SVG image")
+    if svg_node.get("x") != None:
+        if not svg_node.get("x").endswith("mm"):
+            exit_error("Input image x is not given im Millimeters")
+        if float(svg_node.get("x").removesuffix("mm")) != 0.0:
+            exit_error("Input image x must be zero")
+    if svg_node.get("y") != None:
+        if not svg_node.get("y").endswith("mm"):
+            exit_error("Input image y is not given im Millimeters")
+        if float(svg_node.get("y").removesuffix("mm")) != 0.0:
+            exit_error("Input image y must be zero")
 
-    assert svg_node.get("width").endswith("mm"), "Input image width is not given im Millimeters"
-    assert svg_node.get("height").endswith("mm"), "Input image height is not given im Millimeters"
+    if not svg_node.get("width").endswith("mm"):
+        exit_error("Input image width is not given im Millimeters")
+    if not svg_node.get("height").endswith("mm"):
+        exit_error("Input image height is not given im Millimeters")
     image_width = float(svg_node.get("width").removesuffix("mm"))
     image_height = float(svg_node.get("height").removesuffix("mm"))
     print("SVG image dimensions: {}mm x {}mm ".format(image_width, image_height))
 
-    assert svg_node.get("viewBox") != None, "SVG image is missing a 'viewBox' attribute"
+    if svg_node.get("viewBox") == None:
+        exit_error("SVG image is missing a 'viewBox' attribute")
     viewbox_x, viewbox_y, viewbox_width, viewbox_height = map(
         float, svg_node.get("viewBox").split(" ")
     )
@@ -255,14 +272,14 @@ def svg_validate_and_get_image_dimensions(svg_node):
             viewbox_x, viewbox_y, viewbox_width, viewbox_height
         )
     )
-    assert viewbox_x == 0, "SVG image viewBox.x must be zero"
-    assert viewbox_y == 0, "SVG image viewBox.y must be zero"
-    assert (
-        viewbox_width == image_width
-    ), "SVG image viewBox.width must be the same as the image width"
-    assert (
-        viewbox_height == image_height
-    ), "SVG image viewBox.height must be the same as the image height"
+    if viewbox_x != 0:
+        exit_error("SVG image viewBox.x must be zero")
+    if viewbox_y != 0:
+        exit_error("SVG image viewBox.y must be zero")
+    if viewbox_width != image_width:
+        exit_error("SVG image viewBox.width must be the same as the image width")
+    if viewbox_height != image_height:
+        exit_error("SVG image viewBox.height must be the same as the image height")
 
     return image_width, image_height
 
@@ -442,7 +459,7 @@ def svg_create_page(
     defs_node = svg_root_node.find("svg:defs", SVG_NAMESPACE)
     if defs_node == None:
         defs_node = ElementTree.Element(SVG_NAMESPACE_PREFIX + "defs")
-        svg_root_node.insert(defs_node, 0)
+        svg_root_node.append(defs_node)
     defs_node.append(clip_path_node_page)
 
     tags_to_reparent = [
@@ -492,9 +509,9 @@ def process_image(
     page_inner_height_mm: float,
     page_border_mm: float,
 ):
-    # NOTE: This prevents writing "ns0" on each tag in the output file
-    ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
-
+    global g_current_image_filepath
+    g_current_image_filepath = image_filepath
+    print("==============\nProcessing image file: '{}'".format(image_filepath))
     svg_tree = ElementTree.parse(image_filepath)
     svg_root_node = svg_tree.getroot()
     image_width, image_height = svg_validate_and_get_image_dimensions(svg_root_node)
@@ -514,7 +531,7 @@ def process_image(
     for page_index_y in range(dimensions.page_count_y):
         for page_index_x in range(dimensions.page_count_x):
             svg_trees_pages[(page_index_x, page_index_y)] = svg_create_page(
-                svg_tree_page, dimensions, page_index_x, page_index_y, enable_debug_color=True
+                svg_tree_page, dimensions, page_index_x, page_index_y, enable_debug_color=False
             )
 
     image_filename = os.path.splitext(os.path.basename(image_filepath))[0]
@@ -541,8 +558,13 @@ def main():
     PAGE_INNER_WIDTH_MM = 180.0
     PAGE_INNER_HEIGHT_MM = 250.0
     PAGE_BORDER_MM = 14.0
-    IMAGE_FILEPATH = "test-a0.svg"
-    process_image(IMAGE_FILEPATH, PAGE_INNER_WIDTH_MM, PAGE_INNER_HEIGHT_MM, PAGE_BORDER_MM)
+
+    # NOTE: This prevents writing "ns0" on each tag in the output file
+    ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
+
+    image_filepaths = [each for each in os.listdir("./") if each.endswith(".svg")]
+    for image_filepath in image_filepaths:
+        process_image(image_filepath, PAGE_INNER_WIDTH_MM, PAGE_INNER_HEIGHT_MM, PAGE_BORDER_MM)
 
 
 main()
