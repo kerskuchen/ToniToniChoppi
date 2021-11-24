@@ -6,6 +6,15 @@ import shutil
 import ctypes
 from xml.etree import ElementTree
 
+# pip install svglib
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPDF, renderPM
+
+# import cairosvg
+
+# Assuming 72dpi
+# 1" == 25.4mm
+FACTOR_MM_TO_PX = 72.0 / 25.4
 SVG_NAMESPACE = {"svg": "http://www.w3.org/2000/svg"}
 SVG_NAMESPACE_PREFIX = "{http://www.w3.org/2000/svg}"
 g_current_image_filepath = ""
@@ -69,31 +78,38 @@ class PageChoppingDimensions:
         self,
         image_width: float,
         image_height: float,
-        page_inner_width: float,
-        page_inner_height: float,
-        page_border: float,
+        image_unit: str,
+        page_inner_width_mm: float,
+        page_inner_height_mm: float,
+        page_border_mm: float,
     ):
         self.image_width = image_width
         self.image_height = image_height
-        self.page_inner_width = page_inner_width
-        self.page_inner_height = page_inner_height
-        self.page_border = page_border
+        self.image_unit = image_unit
 
-        self.page_outer_width = page_inner_width + 2.0 * page_border
-        self.page_outer_height = page_inner_height + 2.0 * page_border
+        conversion_factor = 1.0
+        if image_unit == "px":
+            conversion_factor = FACTOR_MM_TO_PX
 
-        self.page_count_x = math.ceil(image_width / page_inner_width)
-        self.page_count_y = math.ceil(image_height / page_inner_height)
-        self.last_column_width = image_width % page_inner_width
-        self.last_row_height = image_height % page_inner_height
+        self.page_inner_width = conversion_factor * page_inner_width_mm
+        self.page_inner_height = conversion_factor * page_inner_height_mm
+        self.page_border = conversion_factor * page_border_mm
+
+        self.page_outer_width = conversion_factor * (page_inner_width_mm + 2.0 * page_border_mm)
+        self.page_outer_height = conversion_factor * (page_inner_height_mm + 2.0 * page_border_mm)
+
+        self.page_count_x = math.ceil(image_width / (conversion_factor * page_inner_width_mm))
+        self.page_count_y = math.ceil(image_height / (conversion_factor * page_inner_height_mm))
+        self.last_column_width = image_width % (conversion_factor * page_inner_width_mm)
+        self.last_row_height = image_height % (conversion_factor * page_inner_height_mm)
         if self.last_column_width == 0.0:
-            self.last_column_width = page_inner_width
+            self.last_column_width = conversion_factor * page_inner_width_mm
         if self.last_row_height == 0.0:
-            self.last_row_height = page_inner_height
+            self.last_row_height = conversion_factor * page_inner_height_mm
 
         print("Resulting page count: {}x{}".format(self.page_count_x, self.page_count_y))
-        print("Last column width: {}mm".format(self.last_column_width))
-        print("Last row height: {}mm".format(self.last_row_height))
+        print("Last column width: {}{}".format(self.last_column_width, image_unit))
+        print("Last row height: {}{}".format(self.last_row_height, image_unit))
         if self.page_count_x <= 0:
             exit_error("Image has invalid horizontal dimensions")
         if self.page_count_y <= 0:
@@ -255,27 +271,44 @@ def svg_draw_marker_vertical(
     svg_parent_node.append(group)
 
 
-def svg_validate_and_get_image_dimensions(svg_node) -> tuple[float]:
+def svg_validate_and_get_image_dimensions_and_unit(svg_node) -> tuple[float, float, str]:
     if not svg_node.tag.endswith("svg"):
         exit_error("Input file is not a valid SVG image")
-    if svg_node.get("x") != None:
-        if not svg_node.get("x").endswith("mm"):
-            exit_error("Input image x is not given im Millimeters")
-        if float(svg_node.get("x").removesuffix("mm")) != 0.0:
-            exit_error("Input image x must be zero")
-    if svg_node.get("y") != None:
-        if not svg_node.get("y").endswith("mm"):
-            exit_error("Input image y is not given im Millimeters")
-        if float(svg_node.get("y").removesuffix("mm")) != 0.0:
-            exit_error("Input image y must be zero")
 
-    if not svg_node.get("width").endswith("mm"):
-        exit_error("Input image width is not given im Millimeters")
-    if not svg_node.get("height").endswith("mm"):
-        exit_error("Input image height is not given im Millimeters")
-    image_width = float(svg_node.get("width").removesuffix("mm"))
-    image_height = float(svg_node.get("height").removesuffix("mm"))
-    print("SVG image dimensions: {}mm x {}mm ".format(image_width, image_height))
+    if svg_node.get("x") != None:
+        if svg_node.get("x").endswith("mm"):
+            if float(svg_node.get("x").removesuffix("mm")) != 0.0:
+                exit_error("Input image x must be zero")
+        elif svg_node.get("x").endswith("px"):
+            if float(svg_node.get("x").removesuffix("px")) != 0.0:
+                exit_error("Input image x must be zero")
+        else:
+            exit_error("Input image x is not given in any unit ('mm' or 'px')")
+    if svg_node.get("y") != None:
+        if svg_node.get("y").endswith("mm"):
+            if float(svg_node.get("y").removesuffix("mm")) != 0.0:
+                exit_error("Input image y must be zero")
+        elif svg_node.get("y").endswith("px"):
+            if float(svg_node.get("y").removesuffix("px")) != 0.0:
+                exit_error("Input image y must be zero")
+        else:
+            exit_error("Input image y is not given in any unit ('mm' or 'px')")
+
+    unit_suffix = False
+    if svg_node.get("width").endswith("mm"):
+        unit_suffix = "mm"
+    elif svg_node.get("width").endswith("px"):
+        unit_suffix = "px"
+    else:
+        exit_error("Input image width is not given in any unit ('mm' or 'px')")
+
+    image_width = float(svg_node.get("width").removesuffix(unit_suffix))
+    image_height = float(svg_node.get("height").removesuffix(unit_suffix))
+    print(
+        "SVG image dimensions: {}{} x {}{} ".format(
+            image_width, unit_suffix, image_height, unit_suffix
+        )
+    )
 
     if svg_node.get("viewBox") == None:
         exit_error("SVG image is missing a 'viewBox' attribute")
@@ -283,8 +316,15 @@ def svg_validate_and_get_image_dimensions(svg_node) -> tuple[float]:
         float, svg_node.get("viewBox").split(" ")
     )
     print(
-        "SVG view box dimensions: {}mm x {}mm {}mm x {}mm".format(
-            viewbox_x, viewbox_y, viewbox_width, viewbox_height
+        "SVG view box dimensions: {}{} x {}{} {}{} x {}{}".format(
+            viewbox_x,
+            unit_suffix,
+            viewbox_y,
+            unit_suffix,
+            viewbox_width,
+            unit_suffix,
+            viewbox_height,
+            unit_suffix,
         )
     )
     if viewbox_x != 0:
@@ -296,7 +336,7 @@ def svg_validate_and_get_image_dimensions(svg_node) -> tuple[float]:
     if viewbox_height != image_height:
         exit_error("SVG image viewBox.height must be the same as the image height")
 
-    return image_width, image_height
+    return image_width, image_height, unit_suffix
 
 
 def svg_draw_grid_and_markers(
@@ -529,9 +569,16 @@ def process_image(
     print("==============\nProcessing image file: '{}'".format(image_filepath))
     svg_tree = ElementTree.parse(image_filepath)
     svg_root_node = svg_tree.getroot()
-    image_width, image_height = svg_validate_and_get_image_dimensions(svg_root_node)
+    image_width, image_height, image_unit = svg_validate_and_get_image_dimensions_and_unit(
+        svg_root_node
+    )
     dimensions = PageChoppingDimensions(
-        image_width, image_height, page_inner_width_mm, page_inner_height_mm, page_border_mm
+        image_width,
+        image_height,
+        image_unit,
+        page_inner_width_mm,
+        page_inner_height_mm,
+        page_border_mm,
     )
 
     svg_tree_overview = copy.deepcopy(svg_tree)
@@ -555,14 +602,28 @@ def process_image(
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
 
-    svg_tree_overview.write(os.path.join(output_dir, image_filename + "__overview.svg"))
+    output_filepath_overview_svg = os.path.join(output_dir, image_filename + "__overview.svg")
+    output_filepath_overview_pdf = output_filepath_overview_svg.removesuffix(".svg") + ".pdf"
+    svg_tree_overview.write(output_filepath_overview_svg)
+    drawing_overview = svg2rlg(output_filepath_overview_svg)
+    renderPDF.drawToFile(drawing_overview, output_filepath_overview_pdf)
+    # cairosvg.svg2pdf(
+    #     file_obj=open(output_filepath_overview_svg, "rb"),
+    #     write_to=output_filepath_overview_pdf + "cairo.pdf",
+    # )
+
     for (page_index_x, page_index_y), svg_tree_page in svg_trees_pages.items():
-        svg_tree_page.write(
-            os.path.join(
-                output_dir,
-                "{}__{}x{}.svg".format(image_filename, page_index_x, page_index_y),
-            )
+        output_filepath_svg = os.path.join(
+            output_dir,
+            "{}__{}x{}.svg".format(image_filename, page_index_x, page_index_y),
         )
+        output_filepath_pdf = output_filepath_svg.removesuffix(".svg") + ".pdf"
+        svg_tree_page.write(output_filepath_svg)
+        drawing = svg2rlg(output_filepath_svg)
+        renderPDF.drawToFile(drawing, output_filepath_pdf)
+        # cairosvg.svg2pdf(
+        #     file_obj=open(output_filepath_svg, "rb"), write_to=output_filepath_pdf + "cairo.pdf"
+        # )
 
 
 def main():
