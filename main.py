@@ -6,11 +6,8 @@ import shutil
 import ctypes
 from xml.etree import ElementTree
 
-# pip install svglib
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPDF, renderPM
-
-# import cairosvg
+# pip install cairosvg
+import cairosvg
 
 # Assuming 72dpi
 # 1" == 25.4mm
@@ -605,12 +602,10 @@ def process_image(
     output_filepath_overview_svg = os.path.join(output_dir, image_filename + "__overview.svg")
     output_filepath_overview_pdf = output_filepath_overview_svg.removesuffix(".svg") + ".pdf"
     svg_tree_overview.write(output_filepath_overview_svg)
-    drawing_overview = svg2rlg(output_filepath_overview_svg)
-    renderPDF.drawToFile(drawing_overview, output_filepath_overview_pdf)
-    # cairosvg.svg2pdf(
-    #     file_obj=open(output_filepath_overview_svg, "rb"),
-    #     write_to=output_filepath_overview_pdf + "cairo.pdf",
-    # )
+    cairosvg.svg2pdf(
+        file_obj=open(output_filepath_overview_svg, "rb"),
+        write_to=output_filepath_overview_pdf,
+    )
 
     for (page_index_x, page_index_y), svg_tree_page in svg_trees_pages.items():
         output_filepath_svg = os.path.join(
@@ -619,11 +614,7 @@ def process_image(
         )
         output_filepath_pdf = output_filepath_svg.removesuffix(".svg") + ".pdf"
         svg_tree_page.write(output_filepath_svg)
-        drawing = svg2rlg(output_filepath_svg)
-        renderPDF.drawToFile(drawing, output_filepath_pdf)
-        # cairosvg.svg2pdf(
-        #     file_obj=open(output_filepath_svg, "rb"), write_to=output_filepath_pdf + "cairo.pdf"
-        # )
+        cairosvg.svg2pdf(file_obj=open(output_filepath_svg, "rb"), write_to=output_filepath_pdf)
 
 
 def main():
