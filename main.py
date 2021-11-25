@@ -6,8 +6,12 @@ import shutil
 import ctypes
 from xml.etree import ElementTree
 
+# pip install PyPDF2
+from PyPDF2 import PdfFileMerger
+
 # pip install cairosvg
 import cairosvg
+
 
 # Assuming 72dpi
 # 1" == 25.4mm
@@ -595,26 +599,49 @@ def process_image(
 
     image_filename = os.path.splitext(os.path.basename(image_filepath))[0]
     output_dir = image_filename
+    intermediate_dir = os.path.join(output_dir, "intermediates")
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
+    os.mkdir(intermediate_dir)
 
-    output_filepath_overview_svg = os.path.join(output_dir, image_filename + "__overview.svg")
-    output_filepath_overview_pdf = output_filepath_overview_svg.removesuffix(".svg") + ".pdf"
-    svg_tree_overview.write(output_filepath_overview_svg)
+    filepath_overview_svg = os.path.join(intermediate_dir, image_filename + "__overview.svg")
+    filepath_overview_pdf = os.path.join(output_dir, image_filename + "__overview.pdf")
+    svg_tree_overview.write(filepath_overview_svg)
     cairosvg.svg2pdf(
-        file_obj=open(output_filepath_overview_svg, "rb"),
-        write_to=output_filepath_overview_pdf,
+        file_obj=open(filepath_overview_svg, "rb"),
+        write_to=filepath_overview_pdf,
     )
 
+    filepath_list_pages_pdf = []
     for (page_index_x, page_index_y), svg_tree_page in svg_trees_pages.items():
-        output_filepath_svg = os.path.join(
-            output_dir,
+        filepath_svg = os.path.join(
+            intermediate_dir,
             "{}__{}x{}.svg".format(image_filename, page_index_x, page_index_y),
         )
-        output_filepath_pdf = output_filepath_svg.removesuffix(".svg") + ".pdf"
-        svg_tree_page.write(output_filepath_svg)
-        cairosvg.svg2pdf(file_obj=open(output_filepath_svg, "rb"), write_to=output_filepath_pdf)
+        filepath_pdf = os.path.join(
+            intermediate_dir,
+            "{}__{}x{}.pdf".format(image_filename, page_index_x, page_index_y),
+        )
+        svg_tree_page.write(filepath_svg)
+        cairosvg.svg2pdf(file_obj=open(filepath_svg, "rb"), write_to=filepath_pdf)
+        filepath_list_pages_pdf.append(filepath_pdf)
+
+    filepath_pages_pdf = os.path.join(output_dir, image_filename + "__pages.pdf")
+    merger = PdfFileMerger()
+    for pdf in filepath_list_pages_pdf:
+        merger.append(pdf)
+    merger.write(filepath_pages_pdf)
+    merger.close()
+
+    filepath_overview_and_pages_pdf = os.path.join(
+        output_dir, image_filename + "__overview_and_pages.pdf"
+    )
+    merger = PdfFileMerger()
+    for pdf in [filepath_overview_pdf, filepath_pages_pdf]:
+        merger.append(pdf)
+    merger.write(filepath_overview_and_pages_pdf)
+    merger.close()
 
 
 def main():
