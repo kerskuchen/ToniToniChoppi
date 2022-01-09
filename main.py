@@ -74,7 +74,7 @@ class PageChoppingDimensions:
     last_column_width: float
     last_row_height: float
 
-    # Dimensions are in Millimeters
+    # Dimensions are in Pixels
     def __init__(
         self,
         image_width: float,
@@ -488,8 +488,10 @@ def svg_create_page(
     svg_root_node = svg_tree.getroot()
     clip_rect = dimensions.get_clipping_rect_for_page_index(page_index_x, page_index_y)
 
-    svg_root_node.set("width", str(dimensions.page_outer_width))
-    svg_root_node.set("height", str(dimensions.page_outer_height))
+    svg_root_node.set("x", "0mm")
+    svg_root_node.set("y", "0mm")
+    svg_root_node.set("width", str(dimensions.page_outer_width / FACTOR_MM_TO_PX) + "mm")
+    svg_root_node.set("height", str(dimensions.page_outer_height / FACTOR_MM_TO_PX) + "mm")
     svg_root_node.set(
         "viewBox",
         "{} {} {} {}".format(
