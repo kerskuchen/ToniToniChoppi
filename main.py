@@ -653,7 +653,7 @@ def main():
     # US-Letter 215.9mm  279.4mm
     PAGE_INNER_WIDTH_MM = 180.0
     PAGE_INNER_HEIGHT_MM = 250.0
-    PAGE_BORDER_MM = 14.0
+    PAGE_BORDER_MM = 0.0  # 14.0
 
     # NOTE: This prevents writing "ns0" on each tag in the output file
     ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
